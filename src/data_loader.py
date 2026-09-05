@@ -5,7 +5,24 @@ from typing import Type
 
 
 def load_data(file_path: str, model_class: Type[BaseModel]) -> list[BaseModel]:
+    """
+    Function to check data in a file, validate it, and inform
+    the program user if something is wrong.
 
+    Args:
+        file_path (str): Path to the desired file.
+        model_class (Type[BaseModel]): Pydantic model used to
+        validate the data.
+
+    Returns:
+        list[BaseModel]: A list of validated Pydantic objects.
+
+    Raises:
+        FileNotFoundError: If the path is unknown (triggers sys.exit).
+        json.JSONDecodeError: If the JSON is not valid (triggers sys.exit).
+        ValidationError: If the data does not match the model
+        (triggers sys.exit).
+    """
     try:
 
         with open(file_path) as f:
