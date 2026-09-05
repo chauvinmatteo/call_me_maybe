@@ -2,7 +2,14 @@ import argparse
 
 
 def parsing_arg() -> argparse.Namespace:
+    """
+    This function is used to parsed the different command-line arguments.
 
+    Returns:
+        argparse.Namespace: which are paths to desired files.
+        One is for the functions_definitions, the second one for the input,
+        and the last one for the output.
+    """
     arg_parse = argparse.ArgumentParser()
 
     arg_parse.add_argument("--functions_definition",
