@@ -1,45 +1,63 @@
 import json
+import os
 from llm_sdk import Small_LLM_Model
+from .data_loader import load_data
 from .decoder import generate_json
+from .models import FunctionsCalling, FunctionsDef
+from .parsing import parsing_arg
 
 
-def main():
-    print("🤖 Chargement du modèle en mémoire...")
+def main() -> None:
+    """
+    Function to run the full function-calling pipeline: parse the
+    command-line arguments, load the LLM and its vocabulary, validate
+    the input files, generate a JSON function call for every prompt
+    using constrained decoding, and write the results to the output
+    file.
+    """
+    args = parsing_arg()
+
+    print("Loading LLM model...")
     llm = Small_LLM_Model()
 
     vocab_path = llm.get_path_to_vocab_file()
-    print("🔍 Chargement du vocabulaire complet...")
-    with open(vocab_path) as f:
-        full_vocab = json.load(f)
+    with open(vocab_path, "r", encoding="utf-8") as f:
+        vocab: dict[str, int] = json.load(f)
 
-    # 1. Charger les fonctions pour extraire automatiquement les noms valides
-    with open("data/input/functions_definition.json") as f:
-        functions_data = json.load(f)
-    valid_names = [func["name"] for func in functions_data]
+    functions = load_data(args.functions_definition, FunctionsDef)
+    function_data = [func.model_dump() for func in functions]
+    valid_func = [func["name"] for func in function_data]
 
-    # 2. Charger ton fichier de prompts (adapte le nom du fichier si besoin, ex: prompts.json)
-    with open("data/input/function_calling_tests.json") as f:
-        prompts_data = json.load(f)
+    prompts = load_data(args.input, FunctionsCalling)
+    prompt_data = [prompt.model_dump() for prompt in prompts]
 
-    print(f"\n🚀 Lancement de la génération pour les {len(prompts_data)} tests...\n")
+    result = []
 
-    # 3. Boucler sur chaque prompt du fichier
-    for i, item in enumerate(prompts_data):
+    for item in prompt_data:
         user_query = item["prompt"]
-        print(f"[{i+1}/{len(prompts_data)}] Requête : {user_query}")
-
-        # Contexte d'amorce amélioré pour aider le petit modèle à choisir la bonne fonction
-        prompt = (
-            f"Available functions:\n{json.dumps(functions_data, indent=2)}\n\n"
-            f"User Query: \"{user_query}\"\n"
+        system_prompt = (
+            f"Available functions:\n{json.dumps(function_data)}\n\n"
+            f"User Query: {json.dumps(user_query)}\n"
             f"Generate the strict JSON response:\n"
         )
 
-        # Lancement de la génération sous contrainte pour cette requête
-        generate_json(llm, prompt, full_vocab, valid_names)
-        print("\n" + "-"*40)
+        generate_json_str = generate_json(llm, system_prompt, vocab,
+                                          valid_func, user_query,
+                                          function_data)
 
-    print("\n✅ Tous les tests sont terminés !")
+        try:
+            parsed_json = json.loads(generate_json_str.strip())
+            result.append(parsed_json)
+        except json.JSONDecodeError:
+            result.append({
+                "prompt": user_query,
+                "name": "error_or_invalid_generation",
+                "parameters": {}
+            })
+    output_dir = os.path.dirname(args.output) or "."
+    os.makedirs(output_dir, exist_ok=True)
+    with open(args.output, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
 
 
 if __name__ == "__main__":
