@@ -1,7 +1,4 @@
-
-_CONTROL_CHARS = {chr(b) for b in range(32)}
-_CONTROL_SURROGATES = {chr(256 + b) for b in range(32)}
-_CONTROL_LIKE = _CONTROL_CHARS | _CONTROL_SURROGATES
+from llm_sdk import Small_LLM_Model
 
 
 def get_ids_prefix(prefix: str, vocab: dict[str, int]) -> list[int]:
@@ -23,53 +20,71 @@ def get_ids_prefix(prefix: str, vocab: dict[str, int]) -> list[int]:
     return valid_ids
 
 
-def get_ids_free_mode(vocab: dict[str, int]) -> list[int]:
+def get_ids_free_mode(llm: Small_LLM_Model,
+                      vocab: dict[str, int]) -> list[int]:
     """
     Function to collect every vocabulary token that is safe to emit
-    inside a JSON string value: no JSON structural character
-    (``{``, ``}``, ``:``, ``"``), no backslash, and no raw control
-    character (tab, carriage return, line feed, etc.).
+    inside a JSON string value. Per the JSON grammar, a string may
+    contain any character except an unescaped double quote, an
+    unescaped backslash, or a raw control character (tab, carriage
+    return, line feed, etc.). JSON-structural characters such as
+    ``{``, ``}`` or ``:`` are ordinary content once inside a string
+    (e.g. ``"template": "{user}"`` is valid JSON) and are allowed.
+
+    Each token id is decoded back to real text with llm.decode() and
+    that text is checked directly, so this does not need to know
+    anything about how the tokenizer stores its vocabulary internally.
 
     Args:
+        llm (Small_LLM_Model): The language model wrapper, used to
+        decode each token id back to text.
         vocab (dict[str, int]): Mapping of token text to token id.
 
     Returns:
         list[int]: Token ids that are safe to use inside a JSON string.
     """
-    unwanted_chars = {"{", "}", ":", '"', "\\"}
+    unwanted_chars = {'"', "\\"}
     valid_ids = []
-    for text, token_id in vocab.items():
+    for token_id in vocab.values():
+        text = llm.decode([token_id])
         if any(char in unwanted_chars for char in text):
             continue
-        if any(char in _CONTROL_LIKE for char in text):
+        if any(ord(char) < 32 for char in text):
             continue
         valid_ids.append(token_id)
     return valid_ids
 
 
-def get_ids_numeric_mode(vocab: dict[str, int],
+def get_ids_numeric_mode(llm: Small_LLM_Model, vocab: dict[str, int],
                          allow_decimal: bool = True) -> list[int]:
     """
     Function to collect every vocabulary token that is either a pure
-    JSON-number character sequence or a pure delimiter (whitespace or
+    number character sequence or a pure delimiter (whitespace or
     comma), so a generated number value can never end up containing an
-    invalid character or an unescaped control character.
+    invalid character.
+
+    Each token id is decoded back to real text with llm.decode() and
+    that text is checked directly, so this does not need to know
+    anything about how the tokenizer stores its vocabulary internally.
 
     Args:
+        llm (Small_LLM_Model): The language model wrapper, used to
+        decode each token id back to text.
         vocab (dict[str, int]): Mapping of token text to token id.
         allow_decimal (bool): Whether the generated number may contain
-        '.', 'e'/'E' or a sign character. True for a JSON "number"
-        (float), False for a strict JSON "integer".
+        a '.'. True for a JSON "number" (float), False for a strict
+        JSON "integer".
 
     Returns:
         list[int]: Token ids that are safe to use while generating a
         number value.
     """
-    numeric_chars = (set("0123456789.eE+-") if allow_decimal
+    numeric_chars = (set("0123456789-.") if allow_decimal
                      else set("0123456789-"))
-    delimiter_chars = set(" \n\t,") | _CONTROL_SURROGATES
+    delimiter_chars = set(" \n\t,")
     valid_ids = []
-    for text, token_id in vocab.items():
+    for token_id in vocab.values():
+        text = llm.decode([token_id])
         if text and (all(c in numeric_chars for c in text)
                      or all(c in delimiter_chars for c in text)):
             valid_ids.append(token_id)
