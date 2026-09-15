@@ -5,6 +5,7 @@ from .data_loader import load_data
 from .decoder import generate_json
 from .models import FunctionsCalling, FunctionsDef
 from .parsing import parsing_arg
+from .utils import get_ids_free_mode, get_ids_numeric_mode
 
 
 def main() -> None:
@@ -23,6 +24,12 @@ def main() -> None:
     vocab_path = llm.get_path_to_vocab_file()
     with open(vocab_path, "r", encoding="utf-8") as f:
         vocab: dict[str, int] = json.load(f)
+
+    # These depend only on the model's vocabulary, never on the prompt,
+    # so they are computed once here instead of once per prompt.
+    free_ids = get_ids_free_mode(llm, vocab)
+    numeric_ids = get_ids_numeric_mode(llm, vocab)
+    integer_ids = get_ids_numeric_mode(llm, vocab, allow_decimal=False)
 
     functions = load_data(args.functions_definition, FunctionsDef)
     function_data = [func.model_dump() for func in functions]
@@ -43,7 +50,8 @@ def main() -> None:
 
         generate_json_str = generate_json(llm, system_prompt, vocab,
                                           valid_func, user_query,
-                                          function_data)
+                                          function_data, free_ids,
+                                          numeric_ids, integer_ids)
 
         try:
             parsed_json = json.loads(generate_json_str.strip())

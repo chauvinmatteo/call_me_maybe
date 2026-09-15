@@ -1,7 +1,7 @@
 import json
+from typing import Any
 from llm_sdk import Small_LLM_Model
-from .utils import (get_ids_free_mode, get_ids_numeric_mode,
-                    get_allowed_name_tokens)
+from .utils import get_allowed_name_tokens
 
 
 def json_to_vocab_id(vocab_path: str) -> dict[str, int]:
@@ -22,7 +22,9 @@ def json_to_vocab_id(vocab_path: str) -> dict[str, int]:
 
 def generate_json(llm: Small_LLM_Model, system_prompt: str,
                   vocab: dict[str, int], valid_names: list[str],
-                  user_query: str, functions_data: list[dict]) -> str:
+                  user_query: str, functions_data: list[dict[str, Any]],
+                  free_ids: list[int], numeric_ids: list[int],
+                  integer_ids: list[int]) -> str:
     """
     Function to generate a single function-call JSON object for a user
     query, using constrained decoding so the result is always valid
@@ -37,17 +39,23 @@ def generate_json(llm: Small_LLM_Model, system_prompt: str,
         valid_names (list[str]): The exact function names the model is
         allowed to choose from.
         user_query (str): The original natural-language request.
-        functions_data (list[dict]): The parsed functions_definition.json
+        functions_data (list[dict[str, Any]]): The parsed
+        functions_definition.json
         content, used to look up the parameters of the chosen function.
+        free_ids (list[int]): Token ids safe to use inside a JSON string,
+        from get_ids_free_mode(llm, vocab). Depends only on the model's
+        vocabulary, so the caller computes it once for every prompt.
+        numeric_ids (list[int]): Token ids safe to use for a "number"
+        value, from get_ids_numeric_mode(llm, vocab). Same reasoning.
+        integer_ids (list[int]): Token ids safe to use for an "integer"
+        value, from get_ids_numeric_mode(llm, vocab, allow_decimal=False).
+        Same reasoning.
 
     Returns:
         str: The generated JSON object as text, without the
         system_prompt used to produce it.
     """
 
-    free_ids = get_ids_free_mode(llm, vocab)
-    numeric_ids = get_ids_numeric_mode(llm, vocab)
-    integer_ids = get_ids_numeric_mode(llm, vocab, allow_decimal=False)
     quote_id = vocab['"']
 
     current_text: str = system_prompt
