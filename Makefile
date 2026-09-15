@@ -1,7 +1,8 @@
 PYTHON = python3
 SRC = src
 MYPY_FLAGS = --warn-return-any --warn-unused-ignores --ignore-missing-imports \
---disallow-untyped-defs --check-untyped-defs --exclude ${LLM_SDK}
+--disallow-untyped-defs --check-untyped-defs --exclude ${LLM_SDK} \
+--no-namespace-packages
 VENV = .venv
 LLM_SDK = llm_sdk
 
