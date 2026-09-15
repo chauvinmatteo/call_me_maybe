@@ -45,9 +45,9 @@ def generate_json(llm: Small_LLM_Model, system_prompt: str,
         system_prompt used to produce it.
     """
 
-    free_ids = get_ids_free_mode(vocab)
-    numeric_ids = get_ids_numeric_mode(vocab)
-    integer_ids = get_ids_numeric_mode(vocab, allow_decimal=False)
+    free_ids = get_ids_free_mode(llm, vocab)
+    numeric_ids = get_ids_numeric_mode(llm, vocab)
+    integer_ids = get_ids_numeric_mode(llm, vocab, allow_decimal=False)
     quote_id = vocab['"']
 
     current_text: str = system_prompt
@@ -174,11 +174,10 @@ def generate_json(llm: Small_LLM_Model, system_prompt: str,
                     has_content = True
                     val_tokens += 1
 
-                if val_tokens >= 3:
+                if val_tokens >= 12:
                     break
-
             generated_value = current_text[value_start:]
-            if not is_integer and not any(c in ".eE" for c in generated_value):
+            if not is_integer and "." not in generated_value:
                 current_text += ".0"
 
     suffix = '\n  }\n}'
